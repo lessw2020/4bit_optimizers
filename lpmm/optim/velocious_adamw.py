@@ -4,9 +4,10 @@ import math
 from torch import Tensor
 from typing import List, Optional
 import time
-
+import sys
+sys.path.append('..')
 from .optimizer import LowBitOptimizer
-from ..functional import vectorwise_dequant, vectorwise_quant
+from lpmm.functional import vectorwise_dequant, vectorwise_quant
 
 __all__ = ["AdamW4Bit"]
 
@@ -42,6 +43,7 @@ class AdamW4Bit(LowBitOptimizer):
             weight_decay=weight_decay,
             fused=fused,
             use_first_moment=use_first_moment,
+        )
 
         super().__init__(params, defaults, qconfig)
 

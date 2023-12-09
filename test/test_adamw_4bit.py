@@ -10,9 +10,11 @@ import pytest
 import torch
 import torch.nn as nn
 import torch.optim as optim
+import sys
+sys.path.append("..")
 
-from tests.test_utils import assert_expected, gpu_test, set_rng_seed
-from torchmultimodal.modules.optimizers.anyprecision import AnyPrecisionAdamW
+from test_utils import assert_expected, gpu_test, set_rng_seed
+from lpmm.optim.velocious_adamw import AdamW4Bit
 
 
 @pytest.fixture(autouse=True)
