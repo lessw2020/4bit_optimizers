@@ -1,0 +1,60 @@
+BASE: ['']
+LOCAL_RANK: 0
+OUTPUT: .
+QUANT:
+  DEBUG:
+    ROW_ABSMAX_STAT_EPOCH: False
+    ROW_ABSMAX_STAT_ITER: False
+    TRUNCATED_RATE_STAT_ITER: False
+  G:
+    ENABLE: False
+    THRESHOLD: 4096
+  INIT_STATES: ['param']
+  M:
+    BITS: 4
+    ENABLE: True
+    EXCLUDE_REGEX: ['']
+    EXCLUDE_SUFFIX: ['']
+    GROUP_SIZE: 128
+    QUANT_TYPE:
+      DEFAULT: nonlinear
+      DEFAULT_ONLY: True
+    ROUND_TYPE: real-nearest
+    SCALE_TYPE:
+      DEFAULT: group
+      DEFAULT_ONLY: True
+    SIGNED: True
+    THRESHOLD: 4096
+  P:
+    BITS: 8
+    ENABLE: False
+    EXCLUDE_REGEX: ['']
+    EXCLUDE_SUFFIX: ['']
+    GROUP_SIZE: 64
+    QUANT_TYPE:
+      DEFAULT: linear
+      DEFAULT_ONLY: True
+    ROUND_TYPE: sr
+    SCALE_TYPE:
+      DEFAULT: group
+      DEFAULT_ONLY: True
+    SIGNED: True
+    THRESHOLD: 4096
+  SQM:
+    BITS: 4
+    ENABLE: True
+    EXCLUDE_REGEX: ['']
+    EXCLUDE_SUFFIX: ['']
+    GROUP_SIZE: 128
+    QUANT_TYPE:
+      DEFAULT: power-1
+      DEFAULT_ONLY: True
+    ROUND_TYPE: real-nearest
+    SCALE_TYPE:
+      DEFAULT: group
+      DEFAULT_ONLY: True
+    SIGNED: False
+    THRESHOLD: 4096
+TAG: 
+TRAIN:
+  
