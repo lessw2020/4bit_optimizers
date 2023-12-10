@@ -25,6 +25,7 @@ class AdamW_FourBit(LowBitOptimizer):
         qconfig=None,
         *,
         fused: Optional[bool] = False,
+        variance_dtype = torch.float,
     ):
         if not 0.0 <= lr:
             raise ValueError("Invalid learning rate: {}".format(lr))
@@ -44,8 +45,10 @@ class AdamW_FourBit(LowBitOptimizer):
             weight_decay=weight_decay,
             fused=fused,
             use_first_moment=use_first_moment,
+            variance_dtype = variance_dtype
         )
-
+        self.variance_dtype = variance_dtype
+        print(f"state vdtype = {defaults['variance_dtype']}")
         super().__init__(params, defaults, qconfig)
 
     def __setstate__(self, state):
@@ -111,8 +114,9 @@ class AdamW_FourBit(LowBitOptimizer):
                 self.init_qstate(p, "exp_avg")
                 
                 # Exponential moving average of squared gradient values
-                # note - removed factored for now (less)
-                state["exp_avg_sq"] = torch.zeros((), dtype=torch.float, device=p.device)
+                # note - removed factored for now (less)   
+                variance_dtype = group['variance_dtype']     
+                state["exp_avg_sq"] = torch.zeros((), dtype=variance_dtype, device=p.device)
                 self.init_qstate(p, "exp_avg_sq")
 
             state_steps.append(state["step"])
