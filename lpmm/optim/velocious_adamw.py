@@ -53,6 +53,8 @@ class AdamW_FourBit(LowBitOptimizer):
         for group in self.param_groups:
             group.setdefault("fused", None)
         state_values = list(self.state.values())
+
+        # this is just to ensure that step value is a tensor...
         step_is_tensor = (len(state_values) != 0) and torch.is_tensor(
             state_values[0]["step"]
         )
@@ -70,14 +72,6 @@ class AdamW_FourBit(LowBitOptimizer):
                 f""
             )
 
-    
-    @staticmethod
-    def _approx_sq_grad(exp_avg_sq_row, exp_avg_sq_col):
-        # copy from fairseq's adafactor implementation:
-        # https://github.com/huggingface/transformers/blob/8395f14de6068012787d83989c3627c3df6a252b/src/transformers/optimization.py#L505
-        r_factor = (exp_avg_sq_row / exp_avg_sq_row.mean(dim=-1, keepdim=True)).unsqueeze(-1)
-        c_factor = exp_avg_sq_col.unsqueeze(-2)
-        return torch.mul(r_factor, c_factor)
     
     def _init_group(
         self,
