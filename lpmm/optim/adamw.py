@@ -4,9 +4,10 @@ import math
 from torch import Tensor
 from typing import List, Optional
 import time
-
+import sys
+sys.path.append('..')
 from .optimizer import LowBitOptimizer
-from ..functional import vectorwise_dequant, vectorwise_quant
+from functional import vectorwise_dequant, vectorwise_quant
 
 __all__ = ["AdamW"]
 

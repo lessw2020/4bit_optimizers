@@ -6,7 +6,7 @@ from typing import OrderedDict
 import json
 import os
 
-from lpmm.functional import vectorwise_dequant, vectorwise_quant, _max_reduce_except_dim
+from functional import vectorwise_dequant, vectorwise_quant, _max_reduce_except_dim
 
 
 def empty_cache(ratio):

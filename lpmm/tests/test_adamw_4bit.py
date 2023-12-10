@@ -9,32 +9,39 @@ from copy import deepcopy
 import pytest
 import torch
 import torch.nn as nn
-import torch.optim as optim
+import torch.optim as torch_optim
 import sys
 sys.path.append("..")
 
-from test_utils import assert_expected, gpu_test, set_rng_seed
-from lpmm.optim.velocious_adamw import AdamW4Bit
+from utils_test import assert_expected, gpu_test, set_rng_seed
 
+from optim.velocious_adamw import AdamW_FourBit
 
 @pytest.fixture(autouse=True)
 def random():
     set_rng_seed(2020)
 
+@pytest.fixture()
+def config_path():
+    config_path = f"lpmm/configs/default.yml" 
+
 class TestAdamw4Bit_Optimizer:
-    def _test_adam_equivalence(self, model, model_clone):
+    def _test_adam_equivalence(self, model, model_clone, config_path):
         # Test non-default options
         betas = (0.8, 0.88)
         weight_decay = 0.03
 
-        adam_opt = optim.AdamW(
+        adam_opt = torch_optim.AdamW(
             model_clone.parameters(), betas=betas, weight_decay=weight_decay
         )
-        fourbit_adamw_opt = AdamW4Bit(
+        fourbit_adamw_opt = AdamW_FourBit(
             model.parameters(),
             betas=betas,
             weight_decay=weight_decay,
+            qconfig=config_path,
         )
+        
+        
 
         # Verify params are equal initially
         model_orig_params = [p.clone() for p in model.parameters()]
@@ -64,7 +71,7 @@ class TestAdamw4Bit_Optimizer:
                 assert_expected(p1, p2)
 
     @gpu_test()
-    def test_adam_equivalence_gpu(self, device="cuda"):
+    def test_adam_equivalence_gpu(self, config_path, device="cuda"):
         """
         Tests, on gpu, that fourbit_adamw_opt is approx equivalent to AdamW
         """
@@ -74,10 +81,10 @@ class TestAdamw4Bit_Optimizer:
 
         model_clone = deepcopy(model)
 
-        self._test_adam_equivalence(model, model_clone)
+        self._test_adam_equivalence(model, model_clone, config_path)
 
     
-    def test_adam_equivalence_cpu(self, device="cpu"):
+    def test_adam_equivalence_cpu(self, config_path: None, device="cpu", ):
         """
         Tests that fourbit is equivalent to AdamW on cpu
         """
@@ -90,4 +97,4 @@ class TestAdamw4Bit_Optimizer:
 
         model_clone = deepcopy(model)
 
-        self._test_adam_equivalence(model, model_clone)
+        self._test_adam_equivalence(model, model_clone, config_path)

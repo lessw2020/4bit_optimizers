@@ -3,7 +3,10 @@ from torch import Tensor
 from typing import List, Optional
 
 from .optimizer import LowBitOptimizer
-from ..functional import vectorwise_dequant, vectorwise_quant
+import sys
+sys.path.append('..')
+
+from functional import vectorwise_dequant, vectorwise_quant
 
 __all__ = ['SGD']
 

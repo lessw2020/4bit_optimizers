@@ -4,10 +4,11 @@ from copy import deepcopy
 from itertools import chain
 
 import torch
-
-from ..functional import create_general_qmap, init_lpmm_generator
-from ..utils import get_rank
-from ..config import get_config
+import sys
+sys.path.append('..')
+from functional import create_general_qmap, init_lpmm_generator
+from utils import get_rank
+from config import get_config
 
 compression_time = 0
 

@@ -1,8 +1,10 @@
 import torch
 import os
 import yaml
+import sys
+sys.path.append('..')
 from yacs.config import CfgNode as CN
-from .utils import get_rank, get_world_size
+from utils import get_rank, get_world_size
 
 _C = CN()
 
