@@ -289,7 +289,7 @@ def create_dynamic_map(signed=True, max_exponent_bits=7, total_bits=8):
     For more details see
     (8-Bit Approximations for Parallelism in Deep Learning)[https://arxiv.org/abs/1511.04561]
     """
-
+    print(f"{signed=}, {max_exponent_bits=}, {total_bits=}")
     data = []
     # these are additional items that come from the case
     # where all the exponent bits are zero and no
@@ -646,6 +646,7 @@ def symmetric_atom_dequantize(qx, bit_width, res, **kwargs):
 
 
 def create_pow_map(b, signed, p):
+    print(f"pow map {b=}, {signed=}, {p=}")
     if signed:
         qmap = torch.linspace(-1, 1, (2 ** b)) # no zero ver.
         # qmap = torch.linspace(-1, 1, (2 ** b) - 1) # less one ver.
@@ -657,6 +658,7 @@ def create_pow_map(b, signed, p):
         qmap = torch.linspace(0, 1, (2 ** b) + 1)[1:] # no zero ver.
         if p != 1:
             qmap = qmap ** p
+    print(f"{qmap=}")
     return qmap
 
 
