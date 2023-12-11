@@ -242,6 +242,10 @@ def quant_scaling(qx, **kwargs):
 
 
 def create_general_qmap(quant_type, bit, signed):
+    print(f"{quant_type=}")
+    print(f"{bit=}")
+    print(f"{signed=}")
+    
     if bit == 1:
         return torch.Tensor([-1.0, 1.0]) if signed else torch.Tensor([0.0, 1.0])
     
