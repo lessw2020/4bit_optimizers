@@ -1,6 +1,6 @@
 import torch
 from torch import tensor
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 import torch.distributed as dist
 
 __all__= ["AdamW_FourBit_Triton"]
@@ -50,3 +50,26 @@ class AdamW_FourBit_Triton(torch.optim.Optimizer):
             fused = fused,
         )
         super().__init__(params, defaults)
+    
+    def __setstate__(self, state: Dict[str, Any]) -> None:
+        super().__setstate__(state)
+        for group in self.param_groups:
+            group.setdefault("fused", None)
+        state_values = list(self.state.values())
+        # have to store step as tensor, not scalar
+        step_is_tensor = (len(state_values)!=0 and torch.is_tensor(state_values[0]['step']))
+
+        if not step_is_tensor:
+            for s in state_values:
+                s['step'] = torch.tensor(float(s["step"]))
+    
+    def get_subqconfig(self, optimizer_state_name):
+        if optimizer_state_name == "exp_avg":
+            return self.qconfig.quant.M
+        elif optimizer_state_name == "exp_avg_sq":
+            return self.qconfig.quant.SQM
+        else:
+            raise ValueError(f" invalid state name {optimizer_state_name=}")
+
+    def _init_group():
+        pass
