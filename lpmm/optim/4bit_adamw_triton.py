@@ -1,9 +1,15 @@
 import torch
 from torch import tensor
 from typing import List, Optional
-
+import torch.distributed as dist
 
 __all__= ["FourBit_AdamW_Triton"]
+
+def init_random_generator(gpu, seed = 2020):
+    global random_generator
+    if random_generator is None:
+        random_generator = torch.Generator(device=gpu)
+    random_generator.manual_seed(seed)
 
 class FourBit_AdamW_Triton(torch.optim.Optimizer):
     """ 4bit AdamW with Triton fusion
@@ -30,6 +36,12 @@ class FourBit_AdamW_Triton(torch.optim.Optimizer):
         if not 0.0 <= weight_decay:
             raise ValueError(f"Invalid weight_decay value: {weight_decay=}")
 
+        # q specific
+        if dist.is_initialized():
+            seed = torch.randint(1<<31, size=[], device=torch.device('cuda'))
+            dist.broadcast(seed, src=0)
+            init_random_generator(dist.get_rank(), seed.item()) #avoid stochastic rounding
+        
         defaults = dict(
             lr = lr,
             betas=betas,
