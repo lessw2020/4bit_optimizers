@@ -3,7 +3,7 @@ from torch import tensor
 from typing import List, Optional
 import torch.distributed as dist
 
-__all__= ["FourBit_AdamW_Triton"]
+__all__= ["AdamW_FourBit_Triton"]
 
 def init_random_generator(gpu, seed = 2020):
     global random_generator
@@ -11,7 +11,7 @@ def init_random_generator(gpu, seed = 2020):
         random_generator = torch.Generator(device=gpu)
     random_generator.manual_seed(seed)
 
-class FourBit_AdamW_Triton(torch.optim.Optimizer):
+class AdamW_FourBit_Triton(torch.optim.Optimizer):
     """ 4bit AdamW with Triton fusion
     based on lpmm 4bit Optimizers """
 
