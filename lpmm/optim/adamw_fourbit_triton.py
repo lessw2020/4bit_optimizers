@@ -4,12 +4,41 @@ from typing import Any, Dict, List, Optional
 import torch.distributed as dist
 
 __all__= ["AdamW_FourBit_Triton"]
+'''
+QUANT:
+  M:
+    ENABLE: True
+    BITS: 4
+    GROUP_SIZE: 128
+    SCALE_TYPE:
+      DEFAULT: group
+    QUANT_TYPE:
+      DEFAULT: nonlinear
+    ROUND_TYPE: real-nearest
+    Signed: True
+    Threshold: 4096
+  SQM:
+    ENABLE: True
+    BITS: 4
+    GROUP_SIZE: 128
+    SCALE_TYPE:
+      DEFAULT: rank1
+    QUANT_TYPE:
+      DEFAULT: power-1
+    ROUND_TYPE: real-nearest
+    Signed: False
+'''
 
 def init_random_generator(gpu, seed = 2020):
     global random_generator
     if random_generator is None:
         random_generator = torch.Generator(device=gpu)
     random_generator.manual_seed(seed)
+
+def _get_qenable_fn(p, threshold) -> bool:
+    if threshold and p.numel() <= threshold:
+        return False
+    return True
 
 class AdamW_FourBit_Triton(torch.optim.Optimizer):
     """ 4bit AdamW with Triton fusion
@@ -51,6 +80,27 @@ class AdamW_FourBit_Triton(torch.optim.Optimizer):
         )
         super().__init__(params, defaults)
     
+    def init_qstate(self, p, state_name):
+        state = self.state[p]
+        field = f"{state_name}_qstate"
+        state[field] = {
+            "enable": True, 
+            "overhead": dict(),
+            "qmap": None,
+        }
+        subconfig = self.get_subqconfig(state_name)
+        state[field][
+            "enable"
+        ] = _get_qenable_fn(p, subconfig.THRESHOLD)
+        
+        md = self.get_qmetadata_by_state_name(state_name)
+        qmap_key = (md['quant_type'], md['b'], md['signed'])
+        if qmap_key not in self.qmaps:
+            self.qmaps[qmap_key] = create_general_qmap(*qmap_key)
+        self.qmaps[qmap_key] = self.qmaps[qmap_key].to(p.device)
+        state[field]["qmap"] = self.qmaps[qmap_key]
+
+    
     def __setstate__(self, state: Dict[str, Any]) -> None:
         super().__setstate__(state)
         for group in self.param_groups:
@@ -71,5 +121,36 @@ class AdamW_FourBit_Triton(torch.optim.Optimizer):
         else:
             raise ValueError(f" invalid state name {optimizer_state_name=}")
 
-    def _init_group():
-        pass
+    def _init_group(
+        self,
+        group, 
+        params_with_grad,
+        grads,
+        exp_avgs, 
+        exp_avgs_sqs,
+        exp_avg_sq_rows,
+        exp_avg_sq_cols,
+        state_steps,
+        exp_avgs_q_overhead,
+        exp_avgs_sqs_q_overhead,
+        exp_avgs_qmap,
+        exp_avgs_sqs_qmap,
+    
+    ):
+        for p in group["params"]:
+            if p.grad is None:
+                continue
+            if p.grad.is_sparse:
+                raise RuntimeError("AdamW_FourBit does not support sparse gradients")
+            grads.append(p.grad)
+            state = self.state[p]
+
+            # lazy init state
+            if len(state) ==0:
+                state['step'] = torch.tensor(0.0)
+                state['exp_avg'] = torch.zeros((), dtype= torch.float, device=p.device)
+                self.init_qstate(p,"exp_avg")
+
+                state["exp_avg_sq"] = torch.zeros((), dtype = torch.float, device=p.device)
+                self.init_qstate(p, "exp_avg_sq")
+        

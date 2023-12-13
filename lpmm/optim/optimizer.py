@@ -162,3 +162,8 @@ def _get_qenable_fn(p, prior_enable, th):
     if th is not None and p.numel() <= th:
         return False
     return True
+
+def _get_qenable_fn(p, threshold) -> bool:
+    if threshold and p.numel() <= threshold:
+        return False
+    return True
