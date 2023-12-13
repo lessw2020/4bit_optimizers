@@ -2,32 +2,39 @@ import torch
 from torch import tensor
 from typing import Any, Dict, List, Optional
 import torch.distributed as dist
+from dataclasses import dataclass
+
 
 __all__= ["AdamW_FourBit_Triton"]
-'''
-QUANT:
-  M:
-    ENABLE: True
-    BITS: 4
-    GROUP_SIZE: 128
-    SCALE_TYPE:
-      DEFAULT: group
-    QUANT_TYPE:
-      DEFAULT: nonlinear
-    ROUND_TYPE: real-nearest
-    Signed: True
-    Threshold: 4096
-  SQM:
-    ENABLE: True
-    BITS: 4
-    GROUP_SIZE: 128
-    SCALE_TYPE:
-      DEFAULT: rank1
-    QUANT_TYPE:
-      DEFAULT: power-1
-    ROUND_TYPE: real-nearest
-    Signed: False
-'''
+
+@dataclass
+class QuantParams:
+    bits: int
+    group_size: int
+    scale_type: str
+    quant_type: str
+    round_type: str
+    signed: bool 
+    threshold: int
+    enable: bool = True
+
+class FirstMoment(QuantParams):
+    bits = 4
+    group_size = 128
+    scale_type = 'group'
+    quant_type = 'nonlinear'
+    round_type = 'real-nearest'
+    signed = True
+    threshold = 4096
+
+class SecondMoment(QuantParams):
+    bits = 4
+    group_size = 128
+    scale_type = 'rank1'
+    quant_type = 'power1'
+    round_type = 'real-nearest'
+    signed = False
+
 
 def init_random_generator(gpu, seed = 2020):
     global random_generator
@@ -71,6 +78,10 @@ class AdamW_FourBit_Triton(torch.optim.Optimizer):
             dist.broadcast(seed, src=0)
             init_random_generator(dist.get_rank(), seed.item()) #avoid stochastic rounding
         
+        self.config_q_m = FirstMoment()
+        self.config_q_sqm = SecondMoment()
+        self.qmaps = {}
+
         defaults = dict(
             lr = lr,
             betas=betas,
@@ -80,6 +91,18 @@ class AdamW_FourBit_Triton(torch.optim.Optimizer):
         )
         super().__init__(params, defaults)
     
+    def get_qmetadata_by_state_name(self, optimizer_state_name):
+        subconfig = self.get_subqconfig(optimizer_state_name)
+        md = dict(
+            b=subconfig.bits,
+            scale_type=subconfig.scale_type,
+            quant_type=subconfig.quant_type,
+            round_type=subconfig.round_type,
+            gp_sz=subconfig.group_size,
+            signed=subconfig.signed,
+        )
+        return md
+
     def init_qstate(self, p, state_name):
         state = self.state[p]
         field = f"{state_name}_qstate"
@@ -115,9 +138,9 @@ class AdamW_FourBit_Triton(torch.optim.Optimizer):
     
     def get_subqconfig(self, optimizer_state_name):
         if optimizer_state_name == "exp_avg":
-            return self.qconfig.quant.M
+            return self.config_q_m
         elif optimizer_state_name == "exp_avg_sq":
-            return self.qconfig.quant.SQM
+            return self.config_q_sqm
         else:
             raise ValueError(f" invalid state name {optimizer_state_name=}")
 
