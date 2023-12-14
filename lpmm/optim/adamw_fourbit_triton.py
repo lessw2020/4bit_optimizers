@@ -151,8 +151,6 @@ class AdamW_FourBit_Triton(torch.optim.Optimizer):
         grads,
         exp_avgs, 
         exp_avgs_sqs,
-        exp_avg_sq_rows,
-        exp_avg_sq_cols,
         state_steps,
         exp_avgs_q_overhead,
         exp_avgs_sqs_q_overhead,
@@ -168,7 +166,7 @@ class AdamW_FourBit_Triton(torch.optim.Optimizer):
             grads.append(p.grad)
             state = self.state[p]
 
-            # lazy init state
+            # lazy init state ------    
             if len(state) ==0:
                 state['step'] = torch.tensor(0.0)
                 state['exp_avg'] = torch.zeros((), dtype= torch.float, device=p.device)
@@ -176,4 +174,42 @@ class AdamW_FourBit_Triton(torch.optim.Optimizer):
 
                 state["exp_avg_sq"] = torch.zeros((), dtype = torch.float, device=p.device)
                 self.init_qstate(p, "exp_avg_sq")
+            # ------ end state init
+
+            state_steps.append(state["step"])
+            exp_avgs.append(state["exp_avg"])
+            exp_avgs_sqs.append(state["exp_avg_sq"])
+
+            #exp_avgs_q_enabled.append(self.override_q_enable[id(p)] if id(p) in self.override_q_enable else state["exp_avg_qstate"]["enable"])
+            #exp_avg_sqs_q_enabled.append(self.override_q_enable[id(p)] if id(p) in self.override_q_enable else state["exp_avg_sq_qstate"]["enable"])
+            exp_avgs_q_overhead.append(state["exp_avg_qstate"]["overhead"])
+            #exp_avg_sqs_q_overhead.append(state["exp_avg_sq_qstate"]["overhead"])
+            exp_avgs_qmap.append(state["exp_avg_qstate"]["qmap"])
+            # exp_avg_sqs_qmap.append(state["exp_avg_sq_qstate"]["qmap"])
+
+    @torch.no_grad()
+    def step(self, closure=None):
+        """ single optimization step 
+        """
+
+        loss = None
+        if closure:
+            with torch.enable_grad:
+                loss = closure() 
+        
+        for group in self.param_groups:
+            params_with_grad = []
+            grads = []
+            exp_avgs = []
+            exp_avg_sqs = []
+            state_steps = []
+            beta1, beta2 = group['betas']
+            exp_avgs_qmap = []
+            exp_avg_sqs_qmap = []
+            
+            self._init_group() # todo
+            pass
+
+
+
         
