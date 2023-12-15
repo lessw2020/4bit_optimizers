@@ -328,6 +328,9 @@ def avgs_quant(x, shape):
 
 def nonlinear_quant(qx):
     grouped_qx = group_tensor(qx, 2048)
+    res = cuda_kernel_pack_nonlinear(grouped_qx)
+
+    
 
 
 

@@ -458,7 +458,7 @@ __global__ void pack_nonlinear_4bit_kernel(int32_t bits,
   }
 }
 
-Tensor pack_nonlinear_4bit_cuda(Tensor data,
+Tensor  pack_nonlinear_4bit_cuda(Tensor data,
                                 Tensor qmap,
                                 int bits,
                                 bool stochastic) {
