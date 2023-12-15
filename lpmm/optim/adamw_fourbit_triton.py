@@ -1,5 +1,5 @@
 import torch
-from torch import tensor
+from torch import Tensor
 from typing import Any, Dict, List, Optional
 import torch.distributed as dist
 from dataclasses import dataclass
@@ -152,8 +152,6 @@ class AdamW_FourBit_Triton(torch.optim.Optimizer):
         exp_avgs, 
         exp_avgs_sqs,
         state_steps,
-        exp_avgs_q_overhead,
-        exp_avgs_sqs_q_overhead,
         exp_avgs_qmap,
         exp_avgs_sqs_qmap,
     
@@ -182,7 +180,7 @@ class AdamW_FourBit_Triton(torch.optim.Optimizer):
 
             #exp_avgs_q_enabled.append(self.override_q_enable[id(p)] if id(p) in self.override_q_enable else state["exp_avg_qstate"]["enable"])
             #exp_avg_sqs_q_enabled.append(self.override_q_enable[id(p)] if id(p) in self.override_q_enable else state["exp_avg_sq_qstate"]["enable"])
-            exp_avgs_q_overhead.append(state["exp_avg_qstate"]["overhead"])
+            #exp_avgs_q_overhead.append(state["exp_avg_qstate"]["overhead"])
             #exp_avg_sqs_q_overhead.append(state["exp_avg_sq_qstate"]["overhead"])
             exp_avgs_qmap.append(state["exp_avg_qstate"]["qmap"])
             # exp_avg_sqs_qmap.append(state["exp_avg_sq_qstate"]["qmap"])
@@ -207,9 +205,99 @@ class AdamW_FourBit_Triton(torch.optim.Optimizer):
             exp_avgs_qmap = []
             exp_avg_sqs_qmap = []
             
-            self._init_group() # todo
-            pass
+            self._init_group(
+                group,
+                params_with_grad,
+                grads,
+                exp_avgs,
+                exp_avg_sqs,
+                state_steps,
+                exp_avgs_qmap,
+                exp_avg_sqs_qmap,
+            ) 
 
+            kwargs = dict(
+                params_with_grad = params_with_grad,
+                grads = grads,
+                exp_avgs = exp_avgs,
+                exp_avg_sqs = exp_avg_sqs,
+                state_steps = state_steps,
+                exp_avgs_qmap=exp_avgs_qmap,
+                exp_avg_sqs_qmap = exp_avg_sqs_qmap,
+                beta1 = beta1,
+                beta2= beta2,
+                lr = group['lr'],
+                weight_decay=group['weight_decay'],
+                eps = group['eps']
 
+            )
 
+            _single_tensor_step(**kwargs)
+            
+
+def _single_tensor_step(
+        params_with_grad: List[Tensor],
+        grads: List[Tensor],
+        exp_avgs: List[Tensor],
+        exp_avg_sqs: List[Tensor],
+        state_steps: List[Tensor],
+        exp_avgs_qmap: List,
+        exp_avg_sqs_qmap: List,
+        *,
+        beta1: float,
+        beta2: float,
+        lr: float,
+        weight_decay: float,
+        eps: float
         
+):
+    for i, param in enumerate(params_with_grad):
+        grad = grads[i]
+        q_exp_avg = exp_avgs[i]
+        q_exp_avg_sq = exp_avg_sqs[i]
+        step_t = state_steps[i]
+
+        step+t +=1
+
+        # decoupled weight decay
+        param.mul_(1 - lr * weight_decay)
+
+        # dequant
+        q_enabled = True # todo 
+        sq_enabled = True
+
+        if q_exp_avg.numel() < 2:
+            q_exp_avg.data = exp_avg = torch.zeros_like(param, memory_format=torch.preserve_format)
+        elif q_enabled:
+            exp_avg = avgs_dequant(q_exp_avg, shape = param.shape)
+        else:
+            exp_avg = q_exp_avg
+        
+        if q_exp_avg_sq.numel() < 2:
+            q_exp_avg_sq.data = exp_avg_sq = torch.zeros_like(param, memory_format = torch.preserve_format)
+        elif sq_enabled:
+            exp_avg_sq = sqs_dequant(q_exp_avg_sq, shape = param.shape,  )
+        else:
+            exp_avg_sq = q_exp_avg_sq
+
+        # update avgs
+        exp_avg.lerp_(grad, 1-beta1)
+        exp_avg_sq.mul_(beta2).addcumul_(grad, grad, value = 1-beta2)
+
+        step = step_t.item()
+        bias_corr1 = 1-beta1** step
+        bias_corr2 = 1 - beta2 **step
+        step_size = lr / bias_corr1
+        bias_corr2_sqrt = bias_corr2.sqrt()
+
+        denom = (exp_avg_sq.sqrt() / bias_corr2_sqrt).add_(eps)
+        # weight update
+        param.addcdiv_(exp_avg, denom, value =-step_size)
+
+        # quantize
+        qx, gen = avgs_quant(exp_avg, shape = param.shape)
+        q_exp_avg.data = qx
+
+        qx, gen = sqs_quant(exp_avg_sq, shape = param.shape)
+
+    
