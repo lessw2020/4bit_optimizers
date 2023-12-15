@@ -257,7 +257,7 @@ def _single_tensor_step(
         q_exp_avg_sq = exp_avg_sqs[i]
         step_t = state_steps[i]
 
-        step+t +=1
+        step_t +=1
 
         # decoupled weight decay
         param.mul_(1 - lr * weight_decay)
@@ -300,4 +300,63 @@ def _single_tensor_step(
 
         qx, gen = sqs_quant(exp_avg_sq, shape = param.shape)
 
-    
+
+def avgs_quant(x, shape):
+    """ quantize the exp_avg 
+
+    """
+    group_size = 128
+
+    qx = x.detach()
+
+    meta = {}
+    meta['dtype'] = x.dtype
+    meta['stride'] = x.stride()
+
+    # quant scaling for exp_avgs
+    qx = group_tensor(x, group_size)
+    max_per_row = max_reduce_except_dim(qx.abs(), 0)
+    qx = qx.div(max_per_row)
+    scaled_shape = qx.shape
+
+    # metadata = max_per_row, scaled_shape
+
+    qx = nonlinear_quant(qx)
+
+    return qx, metadata
+
+
+def nonlinear_quant(qx):
+    grouped_qx = group_tensor(qx, 2048)
+
+
+
+
+
+def group_tensor(x: Tensor, group_size: int):
+    """ break the tensor into rows of 'group size', padding if needed with zeros"""
+    x_flat = x.flatten()
+    num_flat = x_flat.shape[0]
+
+    # reshape
+    if num_flat % group_size != 0:
+        # pad
+        new_num_flat = (num_flat // group_size +1) * group_size
+        delta = new_num_flat - num_flat
+        
+        x_flat = torch.cat([x_flat, torch.zeros([delta], dtype = x.dtype, device = x.device)], dim=0)
+    x_groups = x_flat.view(-1, group_size)
+    return x_groups
+
+def max_reduce_except_dim(input, dim):
+    """ compute max along all dims except provided dim """ 
+    rank = input.dim() 
+    result = input
+    if rank:
+        assert dim < rank, f"reducing tensor with {rank} dimensions failed"
+        for d in range(rank):
+            if d != dim:
+                result = result.max(dim=d, keepdim=True).values
+    return result
+
+
