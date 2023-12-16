@@ -18,6 +18,13 @@ Tensor pack_nonlinear_cuda(Tensor data,
 
                             }
 
+Tensor unpack_nonlinear_cuda(Tensor data, 
+Tensor qmap, 
+int64_t num_groups, 
+int64_t group_size) {
+    return unpack_nonlinear_4bit_cuda(data, qmap, num_groups, group_size);
+}
+
 Tensor pack_nonlinear_4bit_cuda(Tensor data,  Tensor qmap)
 {
     bits = 4  // hardcoding this as we are only doing 4 bit
@@ -116,4 +123,50 @@ float noise)
     return rank
 
 
+}
+
+template <typename scalar_t>
+__global__ void unpack_nonlinear_4bit_kernel( const int8_t* __restrict__ data, 
+const float* __restrict__ qmap 
+scalar_t* __restrict__ unpacked)
+{
+    const int32_t bits = 4;
+    const int group_id = blockIdx.x;
+    const int d = threadIdx.x;
+    const int global_thread_id = group_id * blockDim.x + d;
+    const int work_per_int = 8 / bits;
+    const int workint_per_thread = 4;
+    const int work_per_thread = work_per_int << 2;
+    const int8_t mask = (1 << bits) - 1;
+
+    for (int i = 0; i < workint_per_thread; i++) {
+        int64_t global_int_id = global_thread_id * workint_per_thread + i;
+        const uint8_t local_packed = data[global_int_id];
+        for (int j = 0; j < work_per_int; j++) {
+            const int64_t id = global_thread_id * work_per_thread + i * work_per_int + j;
+            const uint8_t unsigned_val = (local_packed >> (j * bits)) & mask;
+            unpacked[id] = (scalar_t)qmap[unsigned_val];
+        }
+    }
+}
+
+Tensor unpack_nonlinear_4bit_cuda( Tensor data, 
+Tensor qmap, 
+int64_t num_groups, 
+int64_t group_size) {
+    const int32_t bits = 4;
+    auto options = torch::TensorOptions().dtype(qmap.dtype()).device(data.device());
+    Tensor unpacked = torch::empty({num_groups, group_size}, options);
+
+    const int work_per_int = 8 / bits;
+    const int work_per_thread = 4;
+    const int work_per_thread = work_per_int * workint_per_thread;
+
+    // call unpacking
+    AT_DISPATCH_FLOATING_TYPES_AND_HALF(qmap.scalar_type(), "unpack_nonlinear_4bit", ([&]
+                                                                                      { unpack_nonlinear_4bit_kernel<scalar_t><<<num_groups, group_size / work_per_thread>>>(
+                                                                                            data.data_ptr<int8_t>(),
+                                                                                            qmap.data_ptr<float_t>(),
+                                                                                            unpacked.data_ptr<scalar_t>()); }))
+    return unpacked;
 }
