@@ -36,11 +36,14 @@ class SecondMoment(QuantParams):
     signed = False
 
 
+'''
+# we are not using stochastic rounding 
 def init_random_generator(gpu, seed = 2020):
     global random_generator
     if random_generator is None:
         random_generator = torch.Generator(device=gpu)
     random_generator.manual_seed(seed)
+'''
 
 def _get_qenable_fn(p, threshold) -> bool:
     if threshold and p.numel() <= threshold:
@@ -76,18 +79,17 @@ class AdamW_FourBit_Triton(torch.optim.Optimizer):
         if dist.is_initialized():
             seed = torch.randint(1<<31, size=[], device=torch.device('cuda'))
             dist.broadcast(seed, src=0)
-            init_random_generator(dist.get_rank(), seed.item()) #avoid stochastic rounding
+            # init_random_generator(dist.get_rank(), seed.item()) #avoid stochastic rounding
         
         self.config_q_m = FirstMoment()
         self.config_q_sqm = SecondMoment()
         self.qmaps = {}
 
-        defaults = dict(
-            lr = lr,
-            betas=betas,
-            eps = eps,
-            weight_decay = weight_decay, 
-            fused = fused,
+        defaults = dict( lr = lr,
+                        betas=betas,
+                        eps = eps,
+                        weight_decay = weight_decay, 
+                        fused = fused,
         )
         super().__init__(params, defaults)
     
@@ -96,7 +98,6 @@ class AdamW_FourBit_Triton(torch.optim.Optimizer):
         md = dict(
             b=subconfig.bits,
             scale_type=subconfig.scale_type,
-            quant_type=subconfig.quant_type,
             round_type=subconfig.round_type,
             gp_sz=subconfig.group_size,
             signed=subconfig.signed,

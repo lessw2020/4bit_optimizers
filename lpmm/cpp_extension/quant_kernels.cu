@@ -90,3 +90,30 @@ pair<uint64_t, uint64_t> seeds) {
         packed[packed_id] = local_packed;
     }
 }
+
+__device__ __forceinline__ int quantize_bsearch(const float * __restrict__ qmap,
+float x, 
+float noise)
+{
+    const int bits = 4;
+    int low = 0;
+    int high = 1 << bits;
+
+    if (x <= qmap[low]) return low;
+    if (qmap[high-1] <= x) return high;
+
+    while low < high {
+        int mid = (low+high) >> 1;
+        if (qmap[mid] <= x) low = mid+1;
+        else high = mid;
+    }
+
+    // return low - 1
+    int rank = 0
+    float mid_val = (qmap[low-1] + qmap[low]) * 0.5f;
+    rank = (mid_val < x) ? low: low-1;
+
+    return rank
+
+
+}
